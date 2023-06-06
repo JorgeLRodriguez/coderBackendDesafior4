@@ -1,5 +1,5 @@
 import fs from "fs";
-import ProductManager from "../persistence/productmanager.js";
+import ProductManager from "./productmanager.js";
 const pathProducts = "src/db/products.json";
 const myProductManager = new ProductManager(pathProducts);
 

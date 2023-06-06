@@ -1,14 +1,9 @@
 import { Router } from "express";
 const router = Router();
-import ProductManager from "../persistence/productmanager.js";
+import ProductManager from "../../daos/fs/productmanager.js";
 const path = "src/db/products.json";
 const myProductManager = new ProductManager(path);
-import { validateNumber } from "../utils/helpers.js";
-import {
-  validateRequest,
-  validateNumberParams,
-  validateCodeNotRepeated,
-} from "../middleware/validators.js";
+import { validateNumber } from "../../utils/helpers.js";
 
 router.get("/", async (req, res) => {
   try {

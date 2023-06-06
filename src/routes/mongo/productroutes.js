@@ -1,15 +1,13 @@
 import { Router } from "express";
-const router = Router();
-import ProductManager from "../persistence/productmanager.js";
-const path = "src/db/products.json";
-const myProductManager = new ProductManager(path);
-import { validateNumber } from "./../utils/helpers.js";
+import { MongoDBProducts } from "../../daos/mongo/mongodbproducts.js";
+import { validateNumber } from "../../utils/helpers.js";
 import {
   validateRequest,
   validateNumberParams,
   validateCodeNotRepeated,
-} from "./../middleware/validators.js";
+} from "../../middleware/validators.js";
 import multer from "multer";
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "src/public/uploads");
@@ -18,11 +16,13 @@ const storage = multer.diskStorage({
     cb(null, file.originalname);
   },
 });
+const router = Router();
 router.use(multer({ storage }).single("thumbnail"));
+const db = new MongoDBProducts();
 
 router.get("/", async (req, res) => {
   try {
-    const products = await myProductManager.getProducts();
+    const products = await db.getAll();
     const limit = req.query.limit;
     const isValidLimit = validateNumber(limit);
     products
@@ -44,10 +44,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", validateNumberParams, async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const product = await myProductManager.getProductById(id);
+    const product = await db.getOne(id);
     product
       ? res.status(200).json({
           status: "success",
@@ -66,16 +66,27 @@ router.get("/:id", validateNumberParams, async (req, res) => {
   }
 });
 
-router.post("/", validateRequest, validateCodeNotRepeated, async (req, res) => {
+router.post("/", validateRequest, async (req, res) => {
   try {
     const newProduct = req.body;
-    const photo = req.file;
-    console.log(newProduct);
-    console.log(photo);
-    newProduct.thumbnail = "/uploads/" + photo.filename;
-    const productCreated = await myProductManager.addProduct(newProduct);
+    const allProducts = await db.getAll();
+    const product = allProducts.find(
+      (product) => product.code == newProduct.code
+    );
+    if (product) {
+      res.status(400).json({
+        status: "error",
+        payload:
+          "Invalid request body. Code already exists: " + newProduct.code,
+      });
+      return;
+    }
+    const productCreated = await db.create(newProduct);
     console.log(productCreated);
-    res.redirect("/");
+    res.status(201).json({
+      status: "success",
+      payload: productCreated,
+    });
   } catch (err) {
     res.status(err.status || 500).json({
       status: "error",
@@ -84,11 +95,11 @@ router.post("/", validateRequest, validateCodeNotRepeated, async (req, res) => {
   }
 });
 
-router.put("/:id", validateRequest, validateNumberParams, async (req, res) => {
+router.put("/:id", validateRequest, async (req, res) => {
   try {
     const id = req.params.id;
     const newProduct = req.body;
-    const productUpdated = await myProductManager.updateProduct(id, newProduct);
+    const productUpdated = await db.update(id, newProduct);
     res.status(200).json({
       status: "success",
       payload: productUpdated,
@@ -101,20 +112,10 @@ router.put("/:id", validateRequest, validateNumberParams, async (req, res) => {
   }
 });
 
-router.delete("/:id", validateNumberParams, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    console.log("delete");
     const id = req.params.id;
-    const product = await myProductManager.getProductById(id);
-    if (!product) {
-      res.status(404).json({
-        status: "error",
-        message: "Sorry, no product found by id: " + id,
-        payload: {},
-      });
-      return;
-    }
-    const productDeleted = await myProductManager.deleteProduct(id);
+    const productDeleted = await db.delete(id);
     res.status(200).json({
       status: "success",
       payload: productDeleted,
